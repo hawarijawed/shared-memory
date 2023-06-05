@@ -1,0 +1,132 @@
+#include<stdio.h>
+#include<sys/ipc.h>
+#include<sys/shm.h>
+#include<stdlib.h>
+#include<unistd.h>
+#include<sys/types.h>
+#include<stdbool.h>
+
+#define BUFFER 7
+#define PWT 2//Produce wait time
+#define cwt 2//consumer wait time
+
+int shmid1,shmid2,shmid3;
+key_t k1 = 1234, k2 = 3456, k3 = 7894;
+
+bool* shm1;
+int* shm2;
+int* shm3;
+
+void main()
+{
+    shmid1 = shmget(k1,sizeof(bool)*2,IPC_CREAT|0666);// For flag
+    shmid2 = shmget(k2,sizeof(int)*1,IPC_CREAT|0666); // FOr turn 
+    shmid3 = shmget(k3,sizeof(int)*BUFFER,IPC_CREAT|0666); // For shared memory
+
+    if(shmid1<0 || shmid2<0 || shmid3<0)
+    {
+        printf("Failed to create memory segment\n");
+        exit(1);
+    }
+
+    shm3 = shmat(shmid3,NULL,0);
+    
+    if(shm3 == (int*)(-1))
+    {
+        printf("Failed to attach memory\n");
+        exit(1);
+    }
+
+    int i = 0;
+    int j = 1;
+    int pid;
+    pid = fork();
+
+    if(pid == 0)
+    {
+        // Producer code
+        shm1 = shmat(shmid1,NULL,0);
+        shm2 = shmat(shmid2,NULL,0);
+        shm3 = shmat(shmid3,NULL,0);
+
+        if(shm1 == (bool*)(-1) || shm2 == (int*)(-1) || shm3 == (int*)(-1))
+        {
+            printf("Failed to attach memory segment 2\n");
+            exit(1);
+        }
+        //Create shared variables
+        
+        bool* flag = shm1;
+        int* turn = shm2;
+        int* buf = shm3;
+        
+        
+            /* code */
+            flag[j] = true;
+            printf("Producer is ready to produce\n");
+            *turn = i;
+
+            while(flag[i] == true && *turn == i); // Busy wait()
+
+            // Critical section
+            printf("Entering into critical section\n");
+            int n = 0,i;
+            printf("Enter the size of array: ");
+            int size;
+            scanf("%d",&size);
+            printf("Enter the value of array\n");
+            for(n = 0;n<size;n++)
+            {
+                scanf("%d",&i);
+                buf[n] = i;
+            }
+          
+            flag[j] = false;
+
+        
+        exit(0);
+
+    }
+
+    if(pid > 0)
+    {
+        // Consumer code
+        shm1 = shmat(shmid1,NULL,0);
+        shm2 = shmat(shmid2,NULL,0);
+        shm3 = shmat(shmid3,NULL,0);
+
+        if(shm1 == (bool*)(-1) || shm2 == (int*)(-1) || shm3 == (int*)(-1))
+        {
+            printf("Failed to attach memory segment 2\n");
+            exit(1);
+        }
+        //Create shared variables
+        
+        bool* flag = shm1;
+        int* turn = shm2;
+        int* buf = shm3;
+        flag[i] = false;
+        wait(3);
+            flag[i] = true;
+            printf("Consumer is ready to consume\n");
+            *turn = j;
+            while(flag[j] == true && *turn == j);
+
+            //Critical section
+            printf("Consumer is in critical section\n");
+            int index = 0;
+            while(index <BUFFER)
+            {
+                printf("%d data from buffer\n",buf[index++]);
+            }
+
+            flag[i] = false;
+
+        
+        exit(0);
+
+        
+        
+
+    }
+}
